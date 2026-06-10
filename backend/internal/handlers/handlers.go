@@ -174,6 +174,63 @@ func (h *Handler) UpdateSubtask(c *gin.Context) {
 	c.JSON(http.StatusOK, goalWithTimeline)
 }
 
+// UpdateSubtaskProgress handles PATCH /subtasks/:taskId/progress
+func (h *Handler) UpdateSubtaskProgress(c *gin.Context) {
+	taskID := c.Param("taskId")
+	var req models.UpdateSubtaskProgressRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	goal, err := h.store.UpdateSubtaskProgress(taskID, req.Progress)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
+
+	c.JSON(http.StatusOK, goalWithTimeline)
+}
+
+// CompleteSubtask handles PATCH /subtasks/:taskId/complete
+func (h *Handler) CompleteSubtask(c *gin.Context) {
+	taskID := c.Param("taskId")
+
+	goal, err := h.store.CompleteSubtask(taskID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	}
+
+	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
+
+	c.JSON(http.StatusOK, goalWithTimeline)
+}
+
+// ReorderSubtasks handles PATCH /goals/:id/subtasks/reorder
+func (h *Handler) ReorderSubtasks(c *gin.Context) {
+	goalID := c.Param("id")
+	var req models.ReorderSubtasksRequest
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	goal, err := h.store.ReorderSubtasks(goalID, req.SubtaskIDs)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
+
+	c.JSON(http.StatusOK, goalWithTimeline)
+}
+
 // DeleteSubtask handles DELETE /goals/:id/subtasks/:taskId
 func (h *Handler) DeleteSubtask(c *gin.Context) {
 	goalID := c.Param("id")

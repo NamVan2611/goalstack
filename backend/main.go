@@ -32,7 +32,10 @@ func main() {
 	// Subtask routes
 	router.POST("/goals/:id/subtasks", handler.AddSubtask)
 	router.PUT("/goals/:id/subtasks/:taskId", handler.UpdateSubtask)
+	router.PATCH("/goals/:id/subtasks/reorder", handler.ReorderSubtasks)
 	router.DELETE("/goals/:id/subtasks/:taskId", handler.DeleteSubtask)
+	router.PATCH("/subtasks/:taskId/progress", handler.UpdateSubtaskProgress)
+	router.PATCH("/subtasks/:taskId/complete", handler.CompleteSubtask)
 
 	// Note routes
 	router.POST("/goals/:id/subtasks/:taskId/notes", handler.AddNote)

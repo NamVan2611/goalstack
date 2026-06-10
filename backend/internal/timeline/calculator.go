@@ -9,6 +9,8 @@ import (
 
 // CalculateTimeline calculates start and end dates for all subtasks based on weights
 func CalculateTimeline(goal *models.Goal) {
+	goal.Progress = CalculateGoalProgress(goal.Subtasks)
+
 	if len(goal.Subtasks) == 0 {
 		return
 	}
@@ -50,6 +52,23 @@ func CalculateTimeline(goal *models.Goal) {
 		// Next subtask starts when current one ends
 		currentDate = goal.Subtasks[i].EndDate
 	}
+}
+
+// CalculateGoalProgress calculates weighted progress across all subtasks.
+func CalculateGoalProgress(subtasks []models.Subtask) float64 {
+	totalWeight := 0.0
+	weightedProgress := 0.0
+
+	for _, subtask := range subtasks {
+		totalWeight += subtask.Weight
+		weightedProgress += subtask.Progress * subtask.Weight
+	}
+
+	if totalWeight == 0 {
+		return 0
+	}
+
+	return weightedProgress / totalWeight
 }
 
 // GetTimelineWithCalculations returns a goal with calculated timeline

@@ -4,6 +4,7 @@ import "time"
 
 // DurationType defines whether duration is in hours or days
 type DurationType string
+type StatusType string
 
 type DateOnly struct {
 	time.Time
@@ -47,6 +48,12 @@ const (
 	Days  DurationType = "days"
 )
 
+const (
+	Todo       StatusType = "todo"
+	InProgress StatusType = "in_progress"
+	Completed  StatusType = "completed"
+)
+
 // Link represents a reference link for a subtask
 type Link struct {
 	ID    string `json:"id"`
@@ -79,6 +86,7 @@ type Subtask struct {
 	Links          []Link          `json:"links"`
 	ChecklistItems []ChecklistItem `json:"checklistItems"`
 	Progress       float64         `json:"progress"` // 0-100
+	Status         StatusType      `json:"status"`
 	AllocatedTime  float64         `json:"allocatedTime"`
 	StartDate      time.Time       `json:"startDate"`
 	EndDate        time.Time       `json:"endDate"`
@@ -93,6 +101,7 @@ type Goal struct {
 	StartDate     time.Time    `json:"startDate"`
 	TotalDuration float64      `json:"totalDuration"`
 	DurationType  DurationType `json:"durationType"` // "hours" or "days"
+	Progress      float64      `json:"progress"`
 	Subtasks      []Subtask    `json:"subtasks"`
 	CreatedAt     time.Time    `json:"createdAt"`
 	UpdatedAt     time.Time    `json:"updatedAt"`
@@ -108,9 +117,10 @@ type CreateGoalRequest struct {
 
 // UpdateGoalRequest represents the request body for updating a goal
 type UpdateGoalRequest struct {
-	Title         *string  `json:"title"`
-	TotalDuration *float64 `json:"totalDuration" binding:"omitempty,gt=0"`
-	DurationType  *string  `json:"durationType" binding:"omitempty,oneof=hours days"`
+	Title         *string   `json:"title"`
+	StartDate     *DateOnly `json:"startDate"`
+	TotalDuration *float64  `json:"totalDuration" binding:"omitempty,gt=0"`
+	DurationType  *string   `json:"durationType" binding:"omitempty,oneof=hours days"`
 }
 
 // CreateSubtaskRequest represents the request body for creating a subtask
@@ -124,6 +134,16 @@ type UpdateSubtaskRequest struct {
 	Title  *string  `json:"title"`
 	Weight *float64 `json:"weight" binding:"omitempty,gt=0"`
 	Order  *int     `json:"order"`
+}
+
+// UpdateSubtaskProgressRequest represents a progress update for a subtask
+type UpdateSubtaskProgressRequest struct {
+	Progress float64 `json:"progress" binding:"gte=0,lte=100"`
+}
+
+// ReorderSubtasksRequest represents the desired subtask order for a goal
+type ReorderSubtasksRequest struct {
+	SubtaskIDs []string `json:"subtaskIds" binding:"required"`
 }
 
 // AddNoteRequest represents the request body for adding a note

@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -21,6 +22,9 @@ type Store interface {
 	AddSubtask(goalID string, subtask *models.Subtask) error
 	GetSubtask(goalID, subtaskID string) (*models.Subtask, error)
 	UpdateSubtask(goalID, subtaskID string, updates *models.UpdateSubtaskRequest) (*models.Subtask, error)
+	UpdateSubtaskProgress(subtaskID string, progress float64) (*models.Goal, error)
+	CompleteSubtask(subtaskID string) (*models.Goal, error)
+	ReorderSubtasks(goalID string, subtaskIDs []string) (*models.Goal, error)
 	DeleteSubtask(goalID, subtaskID string) error
 
 	// Note operations
@@ -92,6 +96,9 @@ func (m *MemoryStore) UpdateGoal(id string, updates *models.UpdateGoalRequest) (
 	if updates.Title != nil {
 		goal.Title = *updates.Title
 	}
+	if updates.StartDate != nil {
+		goal.StartDate = updates.StartDate.Time
+	}
 	if updates.TotalDuration != nil {
 		goal.TotalDuration = *updates.TotalDuration
 	}
@@ -145,6 +152,7 @@ func (m *MemoryStore) AddSubtask(goalID string, subtask *models.Subtask) error {
 	subtask.Links = []models.Link{}
 	subtask.ChecklistItems = []models.ChecklistItem{}
 	subtask.Progress = 0
+	subtask.Status = models.Todo
 
 	// Set order if not provided
 	if subtask.Order == 0 {
@@ -200,11 +208,82 @@ func (m *MemoryStore) UpdateSubtask(goalID, subtaskID string, updates *models.Up
 
 			goal.Subtasks[i].UpdatedAt = time.Now()
 			goal.UpdatedAt = time.Now()
+			if updates.Order != nil {
+				m.normalizeSubtaskOrdersLocked(goal)
+			}
+
+			for j := range goal.Subtasks {
+				if goal.Subtasks[j].ID == subtaskID {
+					return &goal.Subtasks[j], nil
+				}
+			}
+
 			return &goal.Subtasks[i], nil
 		}
 	}
 
 	return nil, fmt.Errorf("subtask not found")
+}
+
+// UpdateSubtaskProgress updates progress for a subtask by ID.
+func (m *MemoryStore) UpdateSubtaskProgress(subtaskID string, progress float64) (*models.Goal, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, goal := range m.goals {
+		for i := range goal.Subtasks {
+			if goal.Subtasks[i].ID == subtaskID {
+				goal.Subtasks[i].Progress = progress
+				goal.Subtasks[i].Status = statusForProgress(progress)
+				goal.Subtasks[i].UpdatedAt = time.Now()
+				goal.UpdatedAt = time.Now()
+				return goal, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("subtask not found")
+}
+
+// CompleteSubtask marks a subtask complete by ID.
+func (m *MemoryStore) CompleteSubtask(subtaskID string) (*models.Goal, error) {
+	return m.UpdateSubtaskProgress(subtaskID, 100)
+}
+
+// ReorderSubtasks updates the order of subtasks within a goal.
+func (m *MemoryStore) ReorderSubtasks(goalID string, subtaskIDs []string) (*models.Goal, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	goal, exists := m.goals[goalID]
+	if !exists {
+		return nil, fmt.Errorf("goal not found")
+	}
+
+	if len(subtaskIDs) != len(goal.Subtasks) {
+		return nil, fmt.Errorf("subtask order must include every subtask")
+	}
+
+	positions := make(map[string]int, len(subtaskIDs))
+	for i, id := range subtaskIDs {
+		if _, exists := positions[id]; exists {
+			return nil, fmt.Errorf("subtask order contains duplicate IDs")
+		}
+		positions[id] = i + 1
+	}
+
+	for i := range goal.Subtasks {
+		position, exists := positions[goal.Subtasks[i].ID]
+		if !exists {
+			return nil, fmt.Errorf("subtask order contains unknown IDs")
+		}
+		goal.Subtasks[i].Order = position
+		goal.Subtasks[i].UpdatedAt = time.Now()
+	}
+
+	m.normalizeSubtaskOrdersLocked(goal)
+	goal.UpdatedAt = time.Now()
+	return goal, nil
 }
 
 // DeleteSubtask deletes a subtask
@@ -220,6 +299,7 @@ func (m *MemoryStore) DeleteSubtask(goalID, subtaskID string) error {
 	for i, subtask := range goal.Subtasks {
 		if subtask.ID == subtaskID {
 			goal.Subtasks = append(goal.Subtasks[:i], goal.Subtasks[i+1:]...)
+			m.normalizeSubtaskOrdersLocked(goal)
 			goal.UpdatedAt = time.Now()
 			return nil
 		}
@@ -371,6 +451,27 @@ func (m *MemoryStore) UpdateChecklistItem(goalID, subtaskID, itemID string, comp
 	}
 
 	return fmt.Errorf("checklist item not found")
+}
+
+func (m *MemoryStore) normalizeSubtaskOrdersLocked(goal *models.Goal) {
+	sort.SliceStable(goal.Subtasks, func(i, j int) bool {
+		return goal.Subtasks[i].Order < goal.Subtasks[j].Order
+	})
+
+	for i := range goal.Subtasks {
+		goal.Subtasks[i].Order = i + 1
+	}
+}
+
+func statusForProgress(progress float64) models.StatusType {
+	switch {
+	case progress >= 100:
+		return models.Completed
+	case progress > 0:
+		return models.InProgress
+	default:
+		return models.Todo
+	}
 }
 
 // DeleteChecklistItem deletes a checklist item
