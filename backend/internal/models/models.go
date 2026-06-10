@@ -5,6 +5,43 @@ import "time"
 // DurationType defines whether duration is in hours or days
 type DurationType string
 
+type DateOnly struct {
+	time.Time
+}
+
+func (d *DateOnly) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+
+	str := string(data)
+	if len(str) >= 2 && str[0] == '"' && str[len(str)-1] == '"' {
+		str = str[1 : len(str)-1]
+	}
+
+	if str == "" {
+		return nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339, str)
+	if err == nil {
+		d.Time = parsed
+		return nil
+	}
+
+	parsed, err = time.Parse("2006-01-02", str)
+	if err == nil {
+		d.Time = parsed
+		return nil
+	}
+
+	return err
+}
+
+func (d DateOnly) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + d.Time.Format("2006-01-02") + "\""), nil
+}
+
 const (
 	Hours DurationType = "hours"
 	Days  DurationType = "days"
@@ -64,7 +101,7 @@ type Goal struct {
 // CreateGoalRequest represents the request body for creating a goal
 type CreateGoalRequest struct {
 	Title         string       `json:"title" binding:"required"`
-	StartDate     time.Time    `json:"startDate" binding:"required"`
+	StartDate     DateOnly     `json:"startDate" binding:"required"`
 	TotalDuration float64      `json:"totalDuration" binding:"required,gt=0"`
 	DurationType  DurationType `json:"durationType" binding:"required,oneof=hours days"`
 }

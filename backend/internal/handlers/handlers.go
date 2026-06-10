@@ -35,7 +35,7 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 	goal := &models.Goal{
 		ID:            uuid.New().String(),
 		Title:         req.Title,
-		StartDate:     req.StartDate,
+		StartDate:     req.StartDate.Time,
 		TotalDuration: req.TotalDuration,
 		DurationType:  req.DurationType,
 	}
@@ -45,7 +45,10 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, goal)
+	// Calculate timeline for consistency with other endpoints
+	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
+
+	c.JSON(http.StatusCreated, goalWithTimeline)
 }
 
 // GetGoal handles GET /goals/:id
