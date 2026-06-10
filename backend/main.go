@@ -3,18 +3,46 @@ package main
 import (
 	"log"
 
-	"github.com/gin-gonic/gin"
-
+	"goalstack/internal/database"
 	"goalstack/internal/handlers"
-	"goalstack/internal/storage"
+	"goalstack/internal/models"
+	"goalstack/internal/repository"
+	"goalstack/internal/service"
+
+	"github.com/gin-gonic/gin"
+	"github.com/joho/godotenv"
 )
 
 func main() {
-	// Initialize in-memory store
-	store := storage.NewMemoryStore()
+	err := godotenv.Load()
+
+	if err != nil {
+		log.Println(err)
+	}
+
+	db, err := database.Connect()
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	// Auto migrate
+	db.AutoMigrate(
+		&models.Goal{},
+		&models.Subtask{},
+		&models.Note{},
+		&models.Link{},
+		&models.ChecklistItem{},
+	)
+
+	// Repository
+	goalRepo := repository.NewGormGoalRepository(db)
+
+	// Service
+	goalService := service.NewGoalService(goalRepo)
 
 	// Initialize handler
-	handler := handlers.NewHandler(store)
+	handler := handlers.NewHandler(goalService)
 
 	// Create Gin router
 	router := gin.Default()

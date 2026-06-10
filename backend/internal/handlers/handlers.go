@@ -4,22 +4,20 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
 
 	"goalstack/internal/models"
-	"goalstack/internal/storage"
-	"goalstack/internal/timeline"
+	"goalstack/internal/service"
 )
 
 // Handler holds dependencies for HTTP handlers
 type Handler struct {
-	store storage.Store
+	service *service.GoalService
 }
 
 // NewHandler creates a new handler
-func NewHandler(store storage.Store) *Handler {
+func NewHandler(service *service.GoalService) *Handler {
 	return &Handler{
-		store: store,
+		service: service,
 	}
 }
 
@@ -32,39 +30,26 @@ func (h *Handler) CreateGoal(c *gin.Context) {
 		return
 	}
 
-	goal := &models.Goal{
-		ID:            uuid.New().String(),
-		Title:         req.Title,
-		StartDate:     req.StartDate.Time,
-		TotalDuration: req.TotalDuration,
-		DurationType:  req.DurationType,
-	}
-
-	if err := h.store.CreateGoal(goal); err != nil {
+	goal, err := h.service.CreateGoal(&req)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Calculate timeline for consistency with other endpoints
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusCreated, goalWithTimeline)
+	c.JSON(http.StatusCreated, goal)
 }
 
 // GetGoal handles GET /goals/:id
 func (h *Handler) GetGoal(c *gin.Context) {
 	id := c.Param("id")
 
-	goal, err := h.store.GetGoal(id)
+	goal, err := h.service.GetGoal(id)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Calculate timeline
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // UpdateGoal handles PUT /goals/:id
@@ -77,23 +62,20 @@ func (h *Handler) UpdateGoal(c *gin.Context) {
 		return
 	}
 
-	goal, err := h.store.UpdateGoal(id, &req)
+	goal, err := h.service.UpdateGoal(id, &req)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Calculate timeline after update
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // DeleteGoal handles DELETE /goals/:id
 func (h *Handler) DeleteGoal(c *gin.Context) {
 	id := c.Param("id")
 
-	if err := h.store.DeleteGoal(id); err != nil {
+	if err := h.service.DeleteGoal(id); err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
@@ -103,20 +85,9 @@ func (h *Handler) DeleteGoal(c *gin.Context) {
 
 // ListGoals handles GET /goals
 func (h *Handler) ListGoals(c *gin.Context) {
-	goals, err := h.store.ListGoals()
+	goals, err := h.service.ListGoals()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Calculate timeline for each goal
-	for i := range goals {
-		calculated := timeline.GetTimelineWithCalculations(&goals[i])
-		goals[i] = *calculated
-	}
-
-	if len(goals) == 0 {
-		c.JSON(http.StatusOK, []models.Goal{})
 		return
 	}
 
@@ -133,22 +104,13 @@ func (h *Handler) AddSubtask(c *gin.Context) {
 		return
 	}
 
-	subtask := &models.Subtask{
-		ID:     uuid.New().String(),
-		GoalID: goalID,
-		Title:  req.Title,
-		Weight: req.Weight,
-	}
-
-	if err := h.store.AddSubtask(goalID, subtask); err != nil {
+	goal, err := h.service.AddSubtask(goalID, &req)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusCreated, goalWithTimeline)
+	c.JSON(http.StatusCreated, goal)
 }
 
 // UpdateSubtask handles PUT /goals/:id/subtasks/:taskId
@@ -162,16 +124,13 @@ func (h *Handler) UpdateSubtask(c *gin.Context) {
 		return
 	}
 
-	_, err := h.store.UpdateSubtask(goalID, taskID, &req)
+	goal, err := h.service.UpdateSubtask(goalID, taskID, &req)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // UpdateSubtaskProgress handles PATCH /subtasks/:taskId/progress
@@ -184,30 +143,26 @@ func (h *Handler) UpdateSubtaskProgress(c *gin.Context) {
 		return
 	}
 
-	goal, err := h.store.UpdateSubtaskProgress(taskID, req.Progress)
+	goal, err := h.service.UpdateSubtaskProgress(taskID, req.Progress)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // CompleteSubtask handles PATCH /subtasks/:taskId/complete
 func (h *Handler) CompleteSubtask(c *gin.Context) {
 	taskID := c.Param("taskId")
 
-	goal, err := h.store.CompleteSubtask(taskID)
+	goal, err := h.service.CompleteSubtask(taskID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // ReorderSubtasks handles PATCH /goals/:id/subtasks/reorder
@@ -220,15 +175,13 @@ func (h *Handler) ReorderSubtasks(c *gin.Context) {
 		return
 	}
 
-	goal, err := h.store.ReorderSubtasks(goalID, req.SubtaskIDs)
+	goal, err := h.service.ReorderSubtasks(goalID, req.SubtaskIDs)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // DeleteSubtask handles DELETE /goals/:id/subtasks/:taskId
@@ -236,15 +189,13 @@ func (h *Handler) DeleteSubtask(c *gin.Context) {
 	goalID := c.Param("id")
 	taskID := c.Param("taskId")
 
-	if err := h.store.DeleteSubtask(goalID, taskID); err != nil {
+	goal, err := h.service.DeleteSubtask(goalID, taskID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // AddNote handles POST /goals/:id/subtasks/:taskId/notes
@@ -258,20 +209,13 @@ func (h *Handler) AddNote(c *gin.Context) {
 		return
 	}
 
-	note := &models.Note{
-		ID:      uuid.New().String(),
-		Content: req.Content,
-	}
-
-	if err := h.store.AddNote(goalID, taskID, note); err != nil {
+	goal, err := h.service.AddNote(goalID, taskID, &req)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusCreated, goalWithTimeline)
+	c.JSON(http.StatusCreated, goal)
 }
 
 // DeleteNote handles DELETE /goals/:id/subtasks/:taskId/notes/:noteId
@@ -280,15 +224,13 @@ func (h *Handler) DeleteNote(c *gin.Context) {
 	taskID := c.Param("taskId")
 	noteID := c.Param("noteId")
 
-	if err := h.store.DeleteNote(goalID, taskID, noteID); err != nil {
+	goal, err := h.service.DeleteNote(goalID, taskID, noteID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // AddLink handles POST /goals/:id/subtasks/:taskId/links
@@ -302,21 +244,13 @@ func (h *Handler) AddLink(c *gin.Context) {
 		return
 	}
 
-	link := &models.Link{
-		ID:    uuid.New().String(),
-		Title: req.Title,
-		URL:   req.URL,
-	}
-
-	if err := h.store.AddLink(goalID, taskID, link); err != nil {
+	goal, err := h.service.AddLink(goalID, taskID, &req)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusCreated, goalWithTimeline)
+	c.JSON(http.StatusCreated, goal)
 }
 
 // DeleteLink handles DELETE /goals/:id/subtasks/:taskId/links/:linkId
@@ -325,15 +259,13 @@ func (h *Handler) DeleteLink(c *gin.Context) {
 	taskID := c.Param("taskId")
 	linkID := c.Param("linkId")
 
-	if err := h.store.DeleteLink(goalID, taskID, linkID); err != nil {
+	goal, err := h.service.DeleteLink(goalID, taskID, linkID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // AddChecklistItem handles POST /goals/:id/subtasks/:taskId/checklist
@@ -347,21 +279,13 @@ func (h *Handler) AddChecklistItem(c *gin.Context) {
 		return
 	}
 
-	item := &models.ChecklistItem{
-		ID:        uuid.New().String(),
-		Title:     req.Title,
-		Completed: false,
-	}
-
-	if err := h.store.AddChecklistItem(goalID, taskID, item); err != nil {
+	goal, err := h.service.AddChecklistItem(goalID, taskID, &req)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusCreated, goalWithTimeline)
+	c.JSON(http.StatusCreated, goal)
 }
 
 // UpdateChecklistItem handles PATCH /goals/:id/subtasks/:taskId/checklist/:itemId
@@ -379,15 +303,13 @@ func (h *Handler) UpdateChecklistItem(c *gin.Context) {
 		return
 	}
 
-	if err := h.store.UpdateChecklistItem(goalID, taskID, itemID, req.Completed); err != nil {
+	goal, err := h.service.UpdateChecklistItem(goalID, taskID, itemID, req.Completed)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }
 
 // DeleteChecklistItem handles DELETE /goals/:id/subtasks/:taskId/checklist/:itemId
@@ -396,13 +318,11 @@ func (h *Handler) DeleteChecklistItem(c *gin.Context) {
 	taskID := c.Param("taskId")
 	itemID := c.Param("itemId")
 
-	if err := h.store.DeleteChecklistItem(goalID, taskID, itemID); err != nil {
+	goal, err := h.service.DeleteChecklistItem(goalID, taskID, itemID)
+	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
 		return
 	}
 
-	goal, _ := h.store.GetGoal(goalID)
-	goalWithTimeline := timeline.GetTimelineWithCalculations(goal)
-
-	c.JSON(http.StatusOK, goalWithTimeline)
+	c.JSON(http.StatusOK, goal)
 }

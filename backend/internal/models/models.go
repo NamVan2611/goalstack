@@ -56,35 +56,38 @@ const (
 
 // Link represents a reference link for a subtask
 type Link struct {
-	ID    string `json:"id"`
-	Title string `json:"title"`
-	URL   string `json:"url"`
+	ID        string `json:"id" gorm:"primaryKey"`
+	SubtaskID string `json:"-" gorm:"index;not null"`
+	Title     string `json:"title"`
+	URL       string `json:"url"`
 }
 
 // Note represents a note attached to a subtask
 type Note struct {
-	ID        string    `json:"id"`
+	ID        string    `json:"id" gorm:"primaryKey"`
+	SubtaskID string    `json:"-" gorm:"index;not null"`
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
 // ChecklistItem represents a checklist item for a subtask
 type ChecklistItem struct {
-	ID        string `json:"id"`
+	ID        string `json:"id" gorm:"primaryKey"`
+	SubtaskID string `json:"-" gorm:"index;not null"`
 	Title     string `json:"title"`
 	Completed bool   `json:"completed"`
 }
 
 // Subtask represents a subtask within a goal
 type Subtask struct {
-	ID             string          `json:"id"`
-	GoalID         string          `json:"goalId"`
+	ID             string          `json:"id" gorm:"primaryKey"`
+	GoalID         string          `json:"goalId" gorm:"index;not null"`
 	Title          string          `json:"title"`
 	Weight         float64         `json:"weight"`
-	Order          int             `json:"order"`
-	Notes          []Note          `json:"notes"`
-	Links          []Link          `json:"links"`
-	ChecklistItems []ChecklistItem `json:"checklistItems"`
+	Order          int             `json:"order" gorm:"column:sort_order"`
+	Notes          []Note          `json:"notes" gorm:"foreignKey:SubtaskID;constraint:OnDelete:CASCADE"`
+	Links          []Link          `json:"links" gorm:"foreignKey:SubtaskID;constraint:OnDelete:CASCADE"`
+	ChecklistItems []ChecklistItem `json:"checklistItems" gorm:"foreignKey:SubtaskID;constraint:OnDelete:CASCADE"`
 	Progress       float64         `json:"progress"` // 0-100
 	Status         StatusType      `json:"status"`
 	AllocatedTime  float64         `json:"allocatedTime"`
@@ -96,13 +99,13 @@ type Subtask struct {
 
 // Goal represents a user's goal
 type Goal struct {
-	ID            string       `json:"id"`
+	ID            string       `json:"id" gorm:"primaryKey"`
 	Title         string       `json:"title"`
 	StartDate     time.Time    `json:"startDate"`
 	TotalDuration float64      `json:"totalDuration"`
 	DurationType  DurationType `json:"durationType"` // "hours" or "days"
 	Progress      float64      `json:"progress"`
-	Subtasks      []Subtask    `json:"subtasks"`
+	Subtasks      []Subtask    `json:"subtasks" gorm:"foreignKey:GoalID;constraint:OnDelete:CASCADE"`
 	CreatedAt     time.Time    `json:"createdAt"`
 	UpdatedAt     time.Time    `json:"updatedAt"`
 }
