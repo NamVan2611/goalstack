@@ -1,4 +1,5 @@
 export type DurationType = 'hours' | 'days'
+export type StatusType = 'todo' | 'in_progress' | 'completed'
 
 export interface Link {
   id: string
@@ -28,6 +29,7 @@ export interface Subtask {
   links: Link[]
   checklistItems: ChecklistItem[]
   progress: number
+  status: StatusType
   allocatedTime: number
   startDate: string
   endDate: string
@@ -39,6 +41,7 @@ export interface Goal {
   startDate: string
   totalDuration: number
   durationType: DurationType
+  progress: number
   subtasks: Subtask[]
 }
 
