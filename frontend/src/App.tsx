@@ -1,311 +1,265 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
+  addChecklistItem,
+  addLink,
+  addNote,
   addSubtask,
   completeSubtask,
   createGoal,
+  deleteChecklistItem,
+  deleteLink,
+  deleteNote,
   fetchGoals,
-  reorderSubtasks,
+  updateChecklistItem,
   updateSubtaskProgress,
 } from './services/api'
-import type {
-  Goal,
-  CreateGoalPayload,
-  CreateSubtaskPayload,
-} from './types'
+import type { Goal, CreateGoalPayload, CreateSubtaskPayload } from './types'
 
 import GoalForm from './components/GoalForm'
-import Timeline from './components/Timeline'
+import Calendar from './components/Calendar'
+import GoalDetails from './components/GoalDetails'
+import StatsPanel from './components/StatsPanel'
 
 function App() {
   const [goals, setGoals] = useState<Goal[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [showGoalForm, setShowGoalForm] = useState(false)
+  const [selectedGoalId, setSelectedGoalId] = useState<string | null>(null)
+
+  const now = new Date()
+  const [year, setYear] = useState(now.getFullYear())
+  const [month, setMonth] = useState(now.getMonth())
 
   useEffect(() => {
     fetchGoals()
-      .then(setGoals)
+      .then((data) => {
+        setGoals(data)
+        if (data.length > 0) setSelectedGoalId(data[0].id)
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [])
 
-  const handleCreateGoal = async (
-    payload: CreateGoalPayload,
-  ) => {
-    setError(null)
+  const selectedGoal = useMemo(
+    () => goals.find((g) => g.id === selectedGoalId) ?? null,
+    [goals, selectedGoalId],
+  )
 
-    try {
-      const created = await createGoal(payload)
-
-      setGoals((current) => [
-        created,
-        ...current,
-      ])
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to create goal',
-      )
-    }
-  }
-
-  const handleAddSubtask = async (
-    goalId: string,
-    payload: CreateSubtaskPayload,
-  ) => {
-    setError(null)
-
-    try {
-      const updatedGoal =
-        await addSubtask(goalId, payload)
-
-      setGoals((current) =>
-        current.map((goal) =>
-          goal.id === goalId
-            ? updatedGoal
-            : goal,
-        ),
-      )
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to add subtask',
-      )
-    }
-  }
+  const totalTasks = goals.reduce((sum, g) => sum + g.subtasks.length, 0)
+  const avgProgress = goals.length
+    ? Math.round(goals.reduce((s, g) => s + (g.progress ?? 0), 0) / goals.length)
+    : 0
 
   const replaceGoal = (updatedGoal: Goal) => {
     setGoals((current) =>
-      current.map((goal) =>
-        goal.id === updatedGoal.id
-          ? updatedGoal
-          : goal,
-      ),
+      current.map((goal) => (goal.id === updatedGoal.id ? updatedGoal : goal)),
     )
   }
 
-  const handleProgressChange = async (
-    subtaskId: string,
-    progress: number,
-  ) => {
+  const runAction = async (action: () => Promise<Goal>, fallback: string) => {
     setError(null)
-
     try {
-      replaceGoal(
-        await updateSubtaskProgress(subtaskId, progress),
-      )
+      replaceGoal(await action())
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to update progress',
-      )
+      setError(err instanceof Error ? err.message : fallback)
     }
   }
 
-  const handleCompleteSubtask = async (
-    subtaskId: string,
-  ) => {
+  const handleCreateGoal = async (payload: CreateGoalPayload) => {
     setError(null)
-
     try {
-      replaceGoal(await completeSubtask(subtaskId))
+      const created = await createGoal(payload)
+      setGoals((current) => [created, ...current])
+      setSelectedGoalId(created.id)
+      setShowGoalForm(false)
     } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to complete subtask',
-      )
+      setError(err instanceof Error ? err.message : 'Failed to create goal')
     }
   }
 
-  const handleReorderSubtasks = async (
+  const handleAddSubtask = (goalId: string, payload: CreateSubtaskPayload) =>
+    runAction(() => addSubtask(goalId, payload), 'Failed to add subtask')
+
+  const handleProgressChange = (subtaskId: string, progress: number) =>
+    runAction(
+      () => updateSubtaskProgress(subtaskId, progress),
+      'Failed to update progress',
+    )
+
+  const handleCompleteSubtask = (subtaskId: string) =>
+    runAction(() => completeSubtask(subtaskId), 'Failed to complete subtask')
+
+  const handleAddNote = (goalId: string, subtaskId: string, content: string) =>
+    runAction(() => addNote(goalId, subtaskId, content), 'Failed to add note')
+
+  const handleDeleteNote = (goalId: string, subtaskId: string, noteId: string) =>
+    runAction(() => deleteNote(goalId, subtaskId, noteId), 'Failed to delete note')
+
+  const handleAddLink = (
     goalId: string,
-    subtaskIds: string[],
-  ) => {
-    setError(null)
+    subtaskId: string,
+    payload: { title: string; url: string },
+  ) => runAction(() => addLink(goalId, subtaskId, payload), 'Failed to add link')
 
-    try {
-      replaceGoal(await reorderSubtasks(goalId, subtaskIds))
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to reorder subtasks',
-      )
-    }
+  const handleDeleteLink = (goalId: string, subtaskId: string, linkId: string) =>
+    runAction(() => deleteLink(goalId, subtaskId, linkId), 'Failed to delete link')
+
+  const handleAddChecklistItem = (
+    goalId: string,
+    subtaskId: string,
+    title: string,
+  ) =>
+    runAction(
+      () => addChecklistItem(goalId, subtaskId, title),
+      'Failed to add checklist item',
+    )
+
+  const handleToggleChecklistItem = (
+    goalId: string,
+    subtaskId: string,
+    itemId: string,
+    completed: boolean,
+  ) =>
+    runAction(
+      () => updateChecklistItem(goalId, subtaskId, itemId, completed),
+      'Failed to update checklist item',
+    )
+
+  const handleDeleteChecklistItem = (
+    goalId: string,
+    subtaskId: string,
+    itemId: string,
+  ) =>
+    runAction(
+      () => deleteChecklistItem(goalId, subtaskId, itemId),
+      'Failed to delete checklist item',
+    )
+
+  const goPrevMonth = () => {
+    setMonth((m) => {
+      if (m === 0) {
+        setYear((y) => y - 1)
+        return 11
+      }
+      return m - 1
+    })
+  }
+
+  const goNextMonth = () => {
+    setMonth((m) => {
+      if (m === 11) {
+        setYear((y) => y + 1)
+        return 0
+      }
+      return m + 1
+    })
+  }
+
+  const goToday = () => {
+    const today = new Date()
+    setYear(today.getFullYear())
+    setMonth(today.getMonth())
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-
-      {/* Background */}
-
-      <div className="absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_right,#0ea5e920,transparent_30%),radial-gradient(circle_at_bottom_left,#06b6d420,transparent_30%)]" />
-
-      <div className="mx-auto max-w-7xl px-6 py-10">
-
-        {/* Header */}
-
-        <header className="mb-10">
-
-          <p className="text-sm uppercase tracking-[0.35em] text-sky-400">
-            GoalStack
-          </p>
-
-          <h1 className="mt-3 text-5xl font-bold">
-            Build Goals.
-            <br />
-            Track Progress.
-          </h1>
-
-          <p className="mt-5 max-w-2xl text-slate-400">
-            Create weighted goals,
-            automatically generate timelines,
-            and manage project execution
-            with an intuitive planner.
-          </p>
-
-        </header>
-
-        {/* Dashboard */}
-
-        <div className="mb-8 grid gap-5 md:grid-cols-3">
-
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-
-            <p className="text-xs uppercase tracking-wider text-slate-500">
-              Total Goals
-            </p>
-
-            <p className="mt-3 text-4xl font-bold text-white">
-              {goals.length}
-            </p>
-
+    <div className="min-h-screen bg-slate-100">
+      {/* Top navigation */}
+      <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-sm font-bold text-white">
+              GS
+            </div>
+            <span className="text-lg font-bold text-slate-900">GoalStack</span>
           </div>
 
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-
-            <p className="text-xs uppercase tracking-wider text-slate-500">
-              Total Tasks
-            </p>
-
-            <p className="mt-3 text-4xl font-bold text-white">
-              {goals.reduce(
-                (sum, goal) =>
-                  sum +
-                  goal.subtasks.length,
-                0,
-              )}
-            </p>
-
+          <div className="flex items-center gap-3">
+            <div className="hidden items-center gap-4 text-sm sm:flex">
+              <span className="text-slate-500">
+                <span className="font-bold text-slate-900">{goals.length}</span> goals
+              </span>
+              <span className="text-slate-500">
+                <span className="font-bold text-slate-900">{totalTasks}</span> tasks
+              </span>
+              <span className="text-slate-500">
+                <span className="font-bold text-indigo-600">{avgProgress}%</span> avg
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowGoalForm((v) => !v)}
+              className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-indigo-500"
+            >
+              + New Goal
+            </button>
           </div>
-
-          <div className="rounded-3xl border border-slate-800 bg-slate-900 p-5">
-
-            <p className="text-xs uppercase tracking-wider text-slate-500">
-              Planner Status
-            </p>
-
-            <p className="mt-3 text-2xl font-bold text-sky-400">
-              Active
-            </p>
-
-          </div>
-
         </div>
+      </header>
 
-        {/* Main Layout */}
+      <main className="mx-auto max-w-7xl px-6 py-8">
+        {error && (
+          <div className="mb-5 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-600">
+            {error}
+          </div>
+        )}
 
-        <div className="grid gap-8 xl:grid-cols-[380px_minmax(0,1fr)]">
+        {showGoalForm && (
+          <div className="mb-6 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-bold text-slate-900">New Goal</h2>
+              <button
+                type="button"
+                onClick={() => setShowGoalForm(false)}
+                className="text-sm text-slate-400 hover:text-slate-700"
+              >
+                Close
+              </button>
+            </div>
+            <GoalForm onSubmit={handleCreateGoal} />
+          </div>
+        )}
 
-          {/* Left */}
-
-          <aside>
-
-            <div className="sticky top-6 rounded-3xl border border-slate-800 bg-slate-900/90 p-6">
-
-              <h2 className="text-2xl font-bold">
-                New Goal
-              </h2>
-
-              <p className="mt-2 text-sm text-slate-400">
-                Create a weighted goal
-                and start planning.
-              </p>
-
-              <GoalForm
-                onSubmit={
-                  handleCreateGoal
-                }
+        {loading ? (
+          <div className="rounded-3xl border border-slate-200 bg-white p-12 text-center text-slate-400 shadow-sm">
+            Loading...
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Calendar + details */}
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+              <Calendar
+                year={year}
+                month={month}
+                goals={goals}
+                selectedGoalId={selectedGoalId}
+                onPrevMonth={goPrevMonth}
+                onNextMonth={goNextMonth}
+                onToday={goToday}
+                onSelectGoal={setSelectedGoalId}
               />
 
-              {error && (
-                <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-300">
-                  {error}
-                </div>
-              )}
-
+              <GoalDetails
+                  goal={selectedGoal}
+                  onAddSubtask={handleAddSubtask}
+                  onProgressChange={handleProgressChange}
+                  onCompleteSubtask={handleCompleteSubtask}
+                  onAddNote={handleAddNote}
+                  onDeleteNote={handleDeleteNote}
+                  onAddLink={handleAddLink}
+                  onDeleteLink={handleDeleteLink}
+                  onAddChecklistItem={handleAddChecklistItem}
+                  onToggleChecklistItem={handleToggleChecklistItem}
+                  onDeleteChecklistItem={handleDeleteChecklistItem} onDeleteSubtask={function (goalId: string, subtaskId: string): void {
+                    throw new Error('Function not implemented.')
+                  } }              />
             </div>
 
-          </aside>
-
-          {/* Right */}
-
-          <main>
-
-            {loading ? (
-              <div className="rounded-3xl border border-slate-800 bg-slate-900 p-10 text-center text-slate-400">
-                Loading...
-              </div>
-            ) : goals.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-slate-700 bg-slate-900/50 p-10 text-center">
-
-                <div className="text-6xl font-bold text-sky-400">
-                  +
-                </div>
-
-                <h3 className="mt-4 text-2xl font-bold">
-                  No goals yet
-                </h3>
-
-                <p className="mt-2 text-slate-400">
-                  Create your first
-                  goal to begin.
-                </p>
-
-              </div>
-            ) : (
-              <div className="space-y-8">
-
-                {goals.map((goal) => (
-                  <Timeline
-                    key={goal.id}
-                    goal={goal}
-                    onAddSubtask={
-                      handleAddSubtask
-                    }
-                    onProgressChange={
-                      handleProgressChange
-                    }
-                    onCompleteSubtask={
-                      handleCompleteSubtask
-                    }
-                    onReorderSubtasks={
-                      handleReorderSubtasks
-                    }
-                  />
-                ))}
-
-              </div>
-            )}
-
-          </main>
-
-        </div>
-
-      </div>
+            {/* Stats */}
+            <StatsPanel goals={goals} />
+          </div>
+        )}
+      </main>
     </div>
   )
 }

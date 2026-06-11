@@ -57,3 +57,71 @@ export function reorderSubtasks(goalId: string, subtaskIds: string[]) {
     body: JSON.stringify({ subtaskIds }),
   })
 }
+
+// Notes
+export function addNote(goalId: string, subtaskId: string, content: string) {
+  return request<Goal>(`/goals/${goalId}/subtasks/${subtaskId}/notes`, {
+    method: 'POST',
+    body: JSON.stringify({ content }),
+  })
+}
+
+export function deleteNote(goalId: string, subtaskId: string, noteId: string) {
+  return request<Goal>(`/goals/${goalId}/subtasks/${subtaskId}/notes/${noteId}`, {
+    method: 'DELETE',
+  })
+}
+
+// Links
+export function addLink(
+  goalId: string,
+  subtaskId: string,
+  payload: { title: string; url: string },
+) {
+  return request<Goal>(`/goals/${goalId}/subtasks/${subtaskId}/links`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
+export function deleteLink(goalId: string, subtaskId: string, linkId: string) {
+  return request<Goal>(`/goals/${goalId}/subtasks/${subtaskId}/links/${linkId}`, {
+    method: 'DELETE',
+  })
+}
+
+// Checklist
+export function addChecklistItem(goalId: string, subtaskId: string, title: string) {
+  return request<Goal>(`/goals/${goalId}/subtasks/${subtaskId}/checklist`, {
+    method: 'POST',
+    body: JSON.stringify({ title }),
+  })
+}
+
+export function updateChecklistItem(
+  goalId: string,
+  subtaskId: string,
+  itemId: string,
+  completed: boolean,
+) {
+  return request<Goal>(
+    `/goals/${goalId}/subtasks/${subtaskId}/checklist/${itemId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify({ completed }),
+    },
+  )
+}
+
+export function deleteChecklistItem(
+  goalId: string,
+  subtaskId: string,
+  itemId: string,
+) {
+  return request<Goal>(
+    `/goals/${goalId}/subtasks/${subtaskId}/checklist/${itemId}`,
+    {
+      method: 'DELETE',
+    },
+  )
+}

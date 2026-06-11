@@ -12,6 +12,9 @@ const initialState = {
   durationType: 'days' as const,
 }
 
+const inputClass =
+  'mt-1.5 w-full rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-sm text-slate-800 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/15'
+
 export default function GoalForm({ onSubmit }: Props) {
   const [form, setForm] = useState(initialState)
 
@@ -29,48 +32,48 @@ export default function GoalForm({ onSubmit }: Props) {
   }
 
   return (
-    <form className="mt-6 space-y-4" onSubmit={handleSubmit}>
-      <label className="block text-sm font-medium text-slate-300">
+    <form className="space-y-4" onSubmit={handleSubmit}>
+      <label className="block text-xs font-semibold text-slate-600">
         Title
         <input
           value={form.title}
           onChange={(event) => handleChange('title', event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+          className={inputClass}
           placeholder="Launch marketing sprint"
           required
         />
       </label>
 
-      <label className="block text-sm font-medium text-slate-300">
+      <label className="block text-xs font-semibold text-slate-600">
         Start date
         <input
           type="date"
           value={form.startDate}
           onChange={(event) => handleChange('startDate', event.target.value)}
-          className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+          className={inputClass}
           required
         />
       </label>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="block text-sm font-medium text-slate-300">
+        <label className="block text-xs font-semibold text-slate-600">
           Total duration
           <input
             type="number"
             min={1}
             value={form.totalDuration}
             onChange={(event) => handleChange('totalDuration', event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+            className={inputClass}
             required
           />
         </label>
 
-        <label className="block text-sm font-medium text-slate-300">
+        <label className="block text-xs font-semibold text-slate-600">
           Unit
           <select
             value={form.durationType}
             onChange={(event) => handleChange('durationType', event.target.value)}
-            className="mt-2 w-full rounded-2xl border border-slate-700 bg-slate-950 px-4 py-3 text-slate-100 outline-none focus:border-sky-500 focus:ring-2 focus:ring-sky-500/20"
+            className={inputClass}
           >
             <option value="days">Days</option>
             <option value="hours">Hours</option>
@@ -80,7 +83,7 @@ export default function GoalForm({ onSubmit }: Props) {
 
       <button
         type="submit"
-        className="w-full rounded-2xl bg-sky-500 px-4 py-3 text-base font-semibold text-slate-950 transition hover:bg-sky-400"
+        className="w-full rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500"
       >
         Create goal
       </button>
